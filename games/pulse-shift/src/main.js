@@ -115,7 +115,9 @@ function buildStars() {
 }
 
 function getRadius(lane) {
-  return orbitBase * (lane === 0 ? CONFIG.innerRatio / CONFIG.outerRatio : 1);
+  const innerRadius = orbitBase * (CONFIG.innerRatio / CONFIG.outerRatio);
+  const normalizedLane = Math.max(0, Math.min(1, lane));
+  return innerRadius + (orbitBase - innerRadius) * normalizedLane;
 }
 
 function polar(angle, radius) {
@@ -611,7 +613,7 @@ function draw(time) {
 }
 
 function frame(time) {
-  const dt = Math.min(0.033, (time - state.lastTime) / 1000 || 0);
+  const dt = Math.max(0, Math.min(0.033, (time - state.lastTime) / 1000 || 0));
   state.lastTime = time;
   update(dt);
   draw(time);
@@ -664,6 +666,7 @@ document.addEventListener("pointerdown", (event) => {
   if (state.mode === "tutorial") handlePrimaryInput(event);
 });
 document.addEventListener("keydown", (event) => {
+  if (event.repeat) return;
   if (["Space", "ArrowUp", "ArrowDown"].includes(event.code)) {
     event.preventDefault();
     if (state.mode === "start") requestStart();
