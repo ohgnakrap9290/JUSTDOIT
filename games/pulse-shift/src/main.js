@@ -13,9 +13,15 @@ const ui = {
   score: $("#score"),
   time: $("#time"),
   timeRing: $("#timeRing"),
+  stageLabel: $("#stageLabel"),
+  stageBanner: $("#stageBanner"),
+  stageNumber: $("#stageNumber"),
+  stageName: $("#stageName"),
+  stageHint: $("#stageHint"),
   combo: $("#combo"),
   comboFill: $("#comboFill"),
   best: $("#bestScore"),
+  bestTime: $("#bestTime"),
   finalScore: $("#finalScore"),
   newBest: $("#newBest"),
   resultLabel: $("#resultLabel"),
@@ -29,13 +35,21 @@ const ui = {
 };
 
 const CONFIG = {
-  duration: 60,
+  stageDuration: 20,
   innerRatio: 0.23,
   outerRatio: 0.37,
   playerRadius: 8,
-  baseSpeed: 1.45,
+  baseSpeed: 1.52,
   hitAngle: 0.105,
 };
+
+const STAGES = [
+  { name: "CALM", hint: "흐름을 익히세요" },
+  { name: "RUSH", hint: "속도가 빨라집니다" },
+  { name: "FLUX", hint: "연속 파동이 시작됩니다" },
+  { name: "REVERSE", hint: "회전 방향이 바뀝니다" },
+  { name: "OVERDRIVE", hint: "한계까지 버티세요" },
+];
 
 const state = {
   mode: "start",
@@ -45,6 +59,8 @@ const state = {
   maxCombo: 1,
   collected: 0,
   elapsed: 0,
+  stage: 0,
+  nextStageAt: CONFIG.stageDuration,
   playerAngle: -Math.PI / 2,
   lane: 1,
   laneVisual: 1,
@@ -57,6 +73,7 @@ const state = {
   lastTime: 0,
   spawnClock: 0,
   screenShake: 0,
+  stageFlash: 0,
   muted: localStorage.getItem("pulse-shift-muted") === "true",
   playedTutorial: localStorage.getItem("pulse-shift-tutorial") === "true",
   seed: 1,
@@ -177,6 +194,8 @@ function resetGame() {
   state.maxCombo = 1;
   state.collected = 0;
   state.elapsed = 0;
+  state.stage = 0;
+  state.nextStageAt = CONFIG.stageDuration;
   state.playerAngle = -Math.PI / 2;
   state.lane = 1;
   state.laneVisual = 1;
@@ -187,6 +206,7 @@ function resetGame() {
   state.pulses = [];
   state.spawnClock = 0.55;
   state.screenShake = 0;
+  state.stageFlash = 0;
   state.seed = dateSeed();
   state.random = mulberry32(state.seed);
   updateHud();
@@ -214,7 +234,7 @@ function requestStart() {
   }
 }
 
-function finishGame(reason = "complete") {
+function finishGame() {
   if (state.mode !== "playing") return;
   state.mode = "result";
   ui.hud.classList.remove("active");
@@ -223,26 +243,27 @@ function finishGame(reason = "complete") {
 
   const score = Math.round(state.score);
   const best = Number(localStorage.getItem("pulse-shift-best") || 0);
+  const bestTime = Number(localStorage.getItem("pulse-shift-best-time") || 0);
   const isBest = score > best;
+  const isBestTime = state.elapsed > bestTime;
   if (isBest) localStorage.setItem("pulse-shift-best", String(score));
+  if (isBestTime) localStorage.setItem("pulse-shift-best-time", String(Math.floor(state.elapsed)));
   ui.finalScore.textContent = score.toLocaleString("ko-KR");
   ui.best.textContent = Math.max(score, best).toLocaleString("ko-KR");
-  ui.newBest.classList.toggle("visible", isBest);
+  ui.bestTime.textContent = Math.max(Math.floor(state.elapsed), bestTime);
+  ui.newBest.textContent = isBestTime ? "NEW SURVIVAL BEST" : "NEW BEST";
+  ui.newBest.classList.toggle("visible", isBest || isBestTime);
   ui.collected.textContent = state.collected;
   ui.maxCombo.textContent = state.maxCombo;
-  ui.survival.textContent = Math.min(60, Math.floor(state.elapsed));
-
-  if (reason === "hit") {
-    ui.resultLabel.textContent = "SIGNAL LOST";
-    ui.resultTitle.textContent = state.elapsed > 35 ? "거의 다 왔어요." : "흐름을 다시 잡아볼까요?";
-    sound("hit");
-    vibrate([80, 45, 100]);
-  } else {
-    ui.resultLabel.textContent = "SIGNAL COMPLETE";
-    ui.resultTitle.textContent = "60초의 흐름을 완성했어요.";
-    sound("finish");
-    vibrate([30, 40, 30]);
-  }
+  ui.survival.textContent = Math.floor(state.elapsed);
+  ui.resultLabel.textContent = `STAGE ${state.stage + 1} · ${getStageInfo().name}`;
+  ui.resultTitle.textContent = state.elapsed >= 80
+    ? "한계 너머까지 도달했어요."
+    : state.elapsed >= 40
+      ? "좋은 흐름이었어요. 더 갈 수 있어요."
+      : "패턴을 읽고 다시 도전해보세요.";
+  sound("hit");
+  vibrate([80, 45, 100]);
 }
 
 function togglePause() {
@@ -277,11 +298,11 @@ function shiftLane() {
 }
 
 function spawnObject() {
-  const progress = state.elapsed / CONFIG.duration;
+  const intensity = Math.min(1, state.elapsed / 100);
   const lane = state.random() > 0.5 ? 1 : 0;
-  const ahead = 1.8 + state.random();
+  const ahead = 1.75 + state.random() * 0.85;
   const angle = state.playerAngle + ahead * state.direction;
-  const hazardChance = Math.min(0.72, 0.38 + progress * 0.28);
+  const hazardChance = Math.min(0.82, 0.34 + intensity * 0.4);
   const type = state.elapsed < 5 || state.random() >= hazardChance ? "signal" : "hazard";
   state.objects.push({
     type,
@@ -293,17 +314,54 @@ function spawnObject() {
     alive: true,
   });
 
-  if (progress > 0.42 && type === "hazard" && state.random() < 0.22) {
+  if (state.stage >= 2 && type === "hazard" && state.random() < Math.min(0.48, 0.2 + state.stage * 0.06)) {
     state.objects.push({
-      type: "signal",
+      type: state.random() < 0.58 ? "signal" : "hazard",
       lane: lane === 0 ? 1 : 0,
-      angle: angle + 0.08 * state.direction,
+      angle: angle + (0.12 + state.random() * 0.2) * state.direction,
       spin: 0,
       rotation: 0,
       pulse: 0,
       alive: true,
     });
   }
+
+  if (state.stage >= 4 && type === "hazard" && state.random() < 0.22) {
+    state.objects.push({
+      type: "hazard",
+      lane,
+      angle: angle + (0.42 + state.random() * 0.2) * state.direction,
+      spin: (state.random() - 0.5) * 2.2,
+      rotation: state.random() * Math.PI,
+      pulse: state.random() * Math.PI * 2,
+      alive: true,
+    });
+  }
+}
+
+function getStageInfo() {
+  return STAGES[Math.min(state.stage, STAGES.length - 1)];
+}
+
+function advanceStage() {
+  state.stage += 1;
+  state.nextStageAt += CONFIG.stageDuration;
+  state.stageFlash = 1;
+  state.objects = state.objects.filter((object) => angularDistance(object.angle, state.playerAngle) > 0.55);
+
+  if (state.stage === 3 || (state.stage > 3 && state.stage % 2 === 1)) {
+    state.direction *= -1;
+  }
+
+  const info = getStageInfo();
+  ui.stageNumber.textContent = `STAGE ${state.stage + 1}`;
+  ui.stageName.textContent = info.name;
+  ui.stageHint.textContent = info.hint;
+  ui.stageBanner.classList.remove("active");
+  void ui.stageBanner.offsetWidth;
+  ui.stageBanner.classList.add("active");
+  sound("combo");
+  vibrate([25, 35, 25]);
 }
 
 function angularDistance(a, b) {
@@ -351,14 +409,9 @@ function collect(object) {
 function update(dt) {
   if (state.mode !== "playing") return;
   state.elapsed += dt;
-  if (state.elapsed >= CONFIG.duration) {
-    state.elapsed = CONFIG.duration;
-    finishGame("complete");
-    return;
-  }
+  if (state.elapsed >= state.nextStageAt) advanceStage();
 
-  const progress = state.elapsed / CONFIG.duration;
-  const speed = CONFIG.baseSpeed + progress * 0.82;
+  const speed = Math.min(3.35, CONFIG.baseSpeed + state.elapsed * 0.015 + state.stage * 0.11);
   state.playerAngle += speed * dt * state.direction;
   state.laneVisual += (state.lane - state.laneVisual) * Math.min(1, dt * 14);
   state.score += dt * 12 * state.combo;
@@ -366,7 +419,8 @@ function update(dt) {
 
   if (state.spawnClock <= 0) {
     spawnObject();
-    state.spawnClock = Math.max(0.43, 0.86 - progress * 0.3) + state.random() * 0.2;
+    const spawnBase = Math.max(0.29, 0.9 - state.elapsed * 0.006 - state.stage * 0.035);
+    state.spawnClock = spawnBase + state.random() * Math.max(0.08, 0.2 - state.stage * 0.018);
   }
 
   const playerPoint = polar(state.playerAngle, getRadius(state.laneVisual));
@@ -387,7 +441,7 @@ function update(dt) {
         const point = polar(object.angle, getRadius(object.lane));
         addParticles(point.x, point.y, "#ff5e8a", 28, 155);
         state.screenShake = 12;
-        finishGame("hit");
+        finishGame();
       }
     }
     const behind = Math.atan2(Math.sin(state.playerAngle - object.angle), Math.cos(state.playerAngle - object.angle)) * state.direction;
@@ -413,17 +467,20 @@ function update(dt) {
   });
   state.pulses = state.pulses.filter((pulse) => pulse.alpha > 0);
   state.screenShake *= 0.85;
+  state.stageFlash = Math.max(0, state.stageFlash - dt * 1.3);
   updateHud();
 }
 
 function updateHud() {
-  const remaining = Math.max(0, Math.ceil(CONFIG.duration - state.elapsed));
+  const elapsed = Math.floor(state.elapsed);
+  const stageProgress = (state.elapsed % CONFIG.stageDuration) / CONFIG.stageDuration;
   ui.score.textContent = Math.round(state.score).toLocaleString("ko-KR");
-  ui.time.textContent = remaining;
+  ui.time.textContent = elapsed;
+  ui.stageLabel.textContent = `STAGE ${state.stage + 1} · ${getStageInfo().name}`;
   ui.combo.textContent = state.combo;
   ui.comboFill.style.width = `${(state.comboCharge / 4) * 100}%`;
-  ui.timeRing.style.setProperty("--time-progress", `${(remaining / CONFIG.duration) * 360}deg`);
-  ui.timeRing.classList.toggle("urgent", remaining <= 10);
+  ui.timeRing.style.setProperty("--time-progress", `${stageProgress * 360}deg`);
+  ui.timeRing.classList.toggle("urgent", state.stage >= 3);
 }
 
 function drawBackground(time) {
@@ -594,6 +651,10 @@ function draw(time) {
   const shakeY = state.screenShake ? (Math.random() - 0.5) * state.screenShake : 0;
   ctx.translate(shakeX, shakeY);
   drawBackground(time);
+  if (state.stageFlash > 0) {
+    ctx.fillStyle = `rgba(124,248,223,${state.stageFlash * 0.09})`;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   const visible = ["playing", "paused", "result"].includes(state.mode);
   if (visible) {
@@ -630,7 +691,7 @@ function toggleSound() {
 
 async function shareResult() {
   const score = Math.round(state.score);
-  const text = `PULSE SHIFT 오늘의 기록: ${score.toLocaleString("ko-KR")}점 · 최대 ${state.maxCombo}x 플로우\n60초 안에 내 기록을 넘어보세요.`;
+  const text = `PULSE SHIFT 오늘의 기록: ${score.toLocaleString("ko-KR")}점 · ${Math.floor(state.elapsed)}초 생존 · STAGE ${state.stage + 1}\n내 기록을 넘어보세요.`;
   try {
     if (navigator.share) {
       await navigator.share({ title: "PULSE SHIFT", text, url: location.href });
@@ -684,6 +745,27 @@ window.addEventListener("resize", resize);
 const daily = dateSeed();
 $("#dailyNumber").textContent = `#${String(daily % 1000).padStart(3, "0")}`;
 ui.best.textContent = Number(localStorage.getItem("pulse-shift-best") || 0).toLocaleString("ko-KR");
+ui.bestTime.textContent = Number(localStorage.getItem("pulse-shift-best-time") || 0);
 ui.sound.classList.toggle("muted", state.muted);
 resize();
+
+if (["localhost", "127.0.0.1"].includes(location.hostname)) {
+  window.__pulseShiftTest = {
+    approachNextStage() {
+      state.objects = [];
+      state.spawnClock = 999;
+      state.elapsed = state.nextStageAt - 0.05;
+    },
+    snapshot() {
+      return {
+        elapsed: state.elapsed,
+        stage: state.stage,
+        stageName: getStageInfo().name,
+        direction: state.direction,
+        mode: state.mode,
+      };
+    },
+  };
+}
+
 requestAnimationFrame(frame);

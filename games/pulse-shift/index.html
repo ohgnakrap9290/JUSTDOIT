@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#070b18" />
-    <meta name="description" content="탭 한 번으로 궤도를 바꾸며 60초를 버티는 원버튼 아케이드 게임, PULSE SHIFT" />
-    <meta property="og:title" content="PULSE SHIFT | 60초 원버튼 아케이드" />
-    <meta property="og:description" content="빛을 모으고 파동을 피하세요. 오늘의 기록은 몇 점?" />
+    <meta name="description" content="탭 한 번으로 궤도를 바꾸며 한계까지 버티는 무한 원버튼 아케이드 게임, PULSE SHIFT" />
+    <meta property="og:title" content="PULSE SHIFT | 무한 원버튼 아케이드" />
+    <meta property="og:description" content="속도와 패턴이 계속 변합니다. 당신은 몇 번째 스테이지까지 갈 수 있나요?" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <title>PULSE SHIFT | 60초 원버튼 아케이드</title>
+    <title>PULSE SHIFT | 무한 원버튼 아케이드</title>
   </head>
   <body>
     <main class="game-shell">
@@ -38,8 +38,8 @@
           <strong id="score">0</strong>
         </div>
         <div class="time-block">
-          <div class="time-ring" id="timeRing"><span id="time">60</span></div>
-          <small>SECONDS</small>
+          <div class="time-ring" id="timeRing"><span id="time">0</span></div>
+          <small id="stageLabel">STAGE 1 · CALM</small>
         </div>
         <div class="combo-block">
           <span>FLOW</span>
@@ -54,16 +54,17 @@
           <i class="orbit orbit-two"></i>
           <span></span>
         </div>
-        <p class="overline">ONE TOUCH · 60 SECONDS</p>
+        <p class="overline">ONE TOUCH · ENDLESS SURVIVAL</p>
         <h1>빛의 궤도를<br /><em>전환하세요.</em></h1>
-        <p class="subtitle">탭 한 번으로 안과 밖을 오가며<br />파동을 피하고 신호를 모으세요.</p>
+        <p class="subtitle">탭 한 번으로 안과 밖을 오가세요.<br />20초마다 더 빠르고 새로운 파동이 시작됩니다.</p>
         <button class="main-button" id="startButton">
           <span>게임 시작</span>
           <kbd>SPACE</kbd>
         </button>
         <div class="best-row">
-          <span>PERSONAL BEST</span>
+          <span>BEST SCORE</span>
           <strong id="bestScore">0</strong>
+          <span class="best-time"><b id="bestTime">0</b>s</span>
         </div>
       </section>
 
@@ -89,7 +90,7 @@
 
       <section class="screen result-screen" id="resultScreen">
         <div class="result-card">
-          <p class="overline" id="resultLabel">SIGNAL COMPLETE</p>
+          <p class="overline" id="resultLabel">SIGNAL LOST</p>
           <h2 id="resultTitle">좋은 흐름이었어요.</h2>
           <div class="result-score">
             <span>SCORE</span>
@@ -115,6 +116,12 @@
         <button class="main-button" id="resumeButton"><span>계속하기</span><kbd>SPACE</kbd></button>
         <button class="text-button" id="quitButton">처음으로</button>
       </section>
+
+      <div class="stage-banner" id="stageBanner" aria-live="polite">
+        <span id="stageNumber">STAGE 2</span>
+        <strong id="stageName">RUSH</strong>
+        <small id="stageHint">속도가 빨라집니다</small>
+      </div>
 
       <div class="toast" id="toast" role="status">결과를 복사했어요</div>
 

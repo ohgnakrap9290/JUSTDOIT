@@ -94,8 +94,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--mint); outline-
 }
 .main-button:hover { transform: translateY(-2px); box-shadow: 0 8px 35px rgba(124,248,223,.24); }
 .main-button kbd { min-width: 54px; padding: 7px 8px; border: 1px solid rgba(4,21,25,.13); border-radius: 5px; color: #34585b; background: rgba(255,255,255,.42); font: 500 8px "DM Mono", monospace; letter-spacing: .08em; }
-.best-row { width: 210px; display: flex; align-items: baseline; justify-content: space-between; margin-top: 18px; padding: 0 3px; color: var(--muted); font: 500 8px "DM Mono", monospace; letter-spacing: .1em; }
+.best-row { width: 250px; display: flex; align-items: baseline; justify-content: space-between; margin-top: 18px; padding: 0 3px; color: var(--muted); font: 500 8px "DM Mono", monospace; letter-spacing: .1em; }
 .best-row strong { color: #dbe3f5; font-size: 13px; letter-spacing: 0; }
+.best-time { padding-left: 12px; border-left: 1px solid var(--line); color: var(--muted); }
+.best-time b { color: var(--mint); font-size: 11px; }
 .hero-orb { display: none; }
 
 .tutorial-screen { align-items: center; padding: 70px 20px; background: rgba(3,5,14,.38); backdrop-filter: blur(4px); }
@@ -140,6 +142,19 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--mint); outline-
 .pause-screen { align-items: center; text-align: center; background: rgba(3,5,14,.67); backdrop-filter: blur(10px); }
 .pause-screen h2 { margin-bottom: 28px; font-size: 28px; }
 .pause-screen .text-button { margin-top: 18px; border: 0; color: var(--muted); background: transparent; font-size: 10px; cursor: pointer; }
+.stage-banner {
+  position: absolute; z-index: 12; left: 50%; top: 50%; transform: translate(-50%, -40%); display: flex; flex-direction: column; align-items: center;
+  visibility: hidden; opacity: 0; pointer-events: none; text-align: center;
+}
+.stage-banner span { color: var(--mint); font: 500 9px "DM Mono", monospace; letter-spacing: .2em; }
+.stage-banner strong { margin: 6px 0; font-size: clamp(34px, 5vw, 58px); letter-spacing: .08em; text-shadow: 0 0 30px rgba(124,248,223,.3); }
+.stage-banner small { color: #a5b1c8; font-size: 11px; }
+.stage-banner.active { visibility: visible; animation: stageReveal 2.2s ease both; }
+@keyframes stageReveal {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(.9); }
+  18%, 68% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -65%) scale(1.04); }
+}
 .toast { position: absolute; z-index: 20; left: 50%; bottom: 75px; transform: translate(-50%, 20px); padding: 10px 15px; border: 1px solid var(--line); border-radius: 18px; color: #dce6fa; background: rgba(12,18,42,.93); font-size: 10px; opacity: 0; visibility: hidden; transition: .25s; }
 .toast.visible { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
 .footer { position: absolute; z-index: 6; inset: auto 38px max(25px, env(safe-area-inset-bottom)); display: flex; justify-content: space-between; color: rgba(132,144,170,.55); font: 500 7px "DM Mono", monospace; letter-spacing: .12em; pointer-events: none; }

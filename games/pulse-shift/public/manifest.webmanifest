@@ -1,7 +1,7 @@
 {
   "name": "PULSE SHIFT",
   "short_name": "PULSE SHIFT",
-  "description": "탭 한 번으로 궤도를 바꾸며 60초를 버티는 원버튼 아케이드",
+  "description": "탭 한 번으로 궤도를 바꾸며 한계까지 버티는 무한 원버튼 아케이드",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
