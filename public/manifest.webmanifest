@@ -1,0 +1,18 @@
+{
+  "name": "하루결 - 나만의 데일리 리셋",
+  "short_name": "하루결",
+  "description": "오늘의 마음과 할 일을 가볍게 정리하는 데일리 리셋 공간",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3efe8",
+  "theme_color": "#1f5148",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
