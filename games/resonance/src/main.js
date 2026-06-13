@@ -1,387 +1,133 @@
 import "./styles.css";
-import {
-  PLAYERS,
-  attemptPlacement,
-  chooseTriangle,
-  createGame,
-  gameStats,
-  getLines,
-  visibleTo,
-} from "./engine.js";
+import { GAMES, SIZE, createState, overlays, playMove, restore, stats } from "./engine.js";
 
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => [...document.querySelectorAll(selector)];
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
 const names = { black: "흑", white: "백", draw: "무승부" };
+let selected = GAMES[0], state = createState(selected.id), muted = localStorage.getItem("tenfold-muted") === "true";
+let audio;
 
-const ui = {
-  board: $("#board"),
-  lineLayer: $("#lineLayer"),
-  turnMessage: $("#turnMessage"),
-  phaseLabel: $("#phaseLabel"),
-  roundNumber: $("#roundNumber"),
-  startOverlay: $("#startOverlay"),
-  passOverlay: $("#passOverlay"),
-  choiceOverlay: $("#choiceOverlay"),
-  resultOverlay: $("#resultOverlay"),
-  rulesDrawer: $("#rulesDrawer"),
-  nextPlayerName: $("#nextPlayerName"),
-  passStone: $("#passStone"),
-  triangleChoices: $("#triangleChoices"),
-  toast: $("#toast"),
-  insight: $("#insightText"),
-};
-
-let game = createGame();
-let viewer = "black";
-let started = false;
-let muted = localStorage.getItem("resonance-muted") === "true";
-let audioContext = null;
-let outcomeTimer = null;
-let pulseTriangle = null;
-
-function playerName(player) {
-  return names[player];
-}
-
-function point(stone) {
-  return { x: 50 + stone.x * 87.5, y: 50 + stone.y * 87.5 };
-}
-
-function initializeAudio() {
-  if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioContext.state === "suspended") audioContext.resume();
-}
-
-function sound(type) {
+function tone(kind) {
   if (muted) return;
-  initializeAudio();
-  const setting = {
-    place: [220, 150, 0.08, "sine"],
-    fail: [130, 75, 0.18, "sawtooth"],
-    clue: [420, 610, 0.15, "sine"],
-    score: [330, 820, 0.42, "triangle"],
-    forbidden: [105, 85, 0.2, "square"],
-    reveal: [250, 390, 0.12, "sine"],
-  }[type];
-  const now = audioContext.currentTime;
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-  oscillator.type = setting[3];
-  oscillator.frequency.setValueAtTime(setting[0], now);
-  oscillator.frequency.exponentialRampToValueAtTime(setting[1], now + setting[2]);
-  gain.gain.setValueAtTime(type === "score" ? 0.09 : 0.045, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + setting[2]);
-  oscillator.connect(gain);
-  gain.connect(audioContext.destination);
-  oscillator.start();
-  oscillator.stop(now + setting[2]);
+  audio ||= new (window.AudioContext || window.webkitAudioContext)();
+  const map={place:[260,180,.08],invalid:[130,90,.14],win:[340,760,.38],remove:[190,310,.18]};
+  const [a,b,d]=map[kind]||map.place,o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime;
+  o.frequency.setValueAtTime(a,t);o.frequency.exponentialRampToValueAtTime(b,t+d);g.gain.setValueAtTime(.045,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(audio.destination);o.start();o.stop(t+d);
 }
+
+function card(game) {
+  return `<article class="game-card" style="--accent:${game.color}" data-game="${game.id}">
+    <div class="card-top"><span>${game.number}</span><small>${game.level}</small></div>
+    <div class="card-art art-${game.id}"><i></i><i></i><i></i><i></i><i></i></div>
+    <p>${game.english}</p><h3>${game.title}</h3><div class="card-rule">${game.summary}</div>
+    <footer><span>${game.time}</span><button data-info="${game.id}">규칙 보기</button></footer>
+  </article>`;
+}
+
+function renderLibrary() {
+  $("#gameGrid").innerHTML=GAMES.map(card).join("");
+}
+
+function openGame(id) {
+  selected=GAMES.find(g=>g.id===id);state=createState(id);
+  $("#library").hidden=true;$("#playView").hidden=false;
+  $("#gameNumber").textContent=`GAME ${selected.number} · ${selected.english}`;
+  $("#gameTitle").textContent=selected.title;$("#gameTagline").textContent=selected.tagline;
+  $("#objectiveText").textContent=selected.objective;
+  document.documentElement.style.setProperty("--game-accent",selected.color);
+  render();
+}
+
+function goLibrary(){ $("#playView").hidden=true;$("#library").hidden=false;$("#resultModal").classList.remove("active"); }
 
 function buildBoard() {
-  const fragment = document.createDocumentFragment();
-  for (let y = 0; y < 9; y += 1) {
-    for (let x = 0; x < 9; x += 1) {
-      const cell = document.createElement("button");
-      cell.className = "cell";
-      cell.dataset.x = x;
-      cell.dataset.y = y;
-      cell.setAttribute("role", "gridcell");
-      cell.setAttribute("aria-label", `${String.fromCharCode(65 + x)}${9 - y}`);
-      fragment.append(cell);
-    }
+  const board=$("#board");board.innerHTML="";
+  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
+    const cell=document.createElement("button");cell.className="cell";cell.dataset.x=x;cell.dataset.y=y;
+    cell.setAttribute("aria-label",`${String.fromCharCode(65+x)}${SIZE-y}`);board.append(cell);
   }
-  ui.board.append(fragment);
-
-  $(".coordinate-top").innerHTML = "ABCDEFGHI".split("").map((letter) => `<span>${letter}</span>`).join("");
-  $(".coordinate-left").innerHTML = Array.from({ length: 9 }, (_, index) => `<span>${9 - index}</span>`).join("");
 }
 
-function stoneMarkup(stone, isVisible) {
-  if (!isVisible) return "";
-  const lifeLabel = stone.player === viewer ? `<b>${stone.life}</b>` : "";
-  const classes = [
-    "stone",
-    `${stone.player}-stone`,
-    stone.life === 1 ? "expiring" : "",
-    stone.revealed && stone.player !== viewer ? "revealed" : "",
-  ].filter(Boolean).join(" ");
-  return `<span class="${classes}" aria-label="${playerName(stone.player)} 돌, 수명 ${stone.life}">${lifeLabel}</span>`;
+function point(p){return{x:50+p.x*100,y:50+p.y*100};}
+function renderConnections(links){
+  $("#connectionLayer").innerHTML=links.map(l=>{const a=point(l.a),b=point(l.b);return `<line class="link ${l.player}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;}).join("");
 }
 
 function renderBoard() {
-  $$(".cell").forEach((cell) => {
-    const x = Number(cell.dataset.x);
-    const y = Number(cell.dataset.y);
-    const stone = game.stones.find((candidate) => candidate.x === x && candidate.y === y);
-    const trace = [...game.traces].reverse().find((candidate) => candidate.x === x && candidate.y === y);
-    cell.innerHTML = [
-      trace ? `<span class="trace"><i></i></span>` : "",
-      stoneMarkup(stone, stone && visibleTo(stone, viewer)),
-    ].join("");
-    cell.classList.toggle("occupied-own", stone?.player === viewer);
-    cell.classList.toggle("has-hidden", Boolean(stone && !visibleTo(stone, viewer)));
+  const overlay=overlays(state);
+  $$(".cell").forEach(cell=>{
+    const x=+cell.dataset.x,y=+cell.dataset.y,stone=state.board[y][x],control=overlay.controls[`${x},${y}`];
+    cell.className="cell";
+    if(overlay.legal.has(`${x},${y}`))cell.classList.add("legal");
+    if(state.lastMove?.x===x&&state.lastMove?.y===y)cell.classList.add("last-move");
+    if(state.removed?.includes(`${x},${y}`))cell.classList.add("removed");
+    cell.innerHTML=stone?`<span class="stone ${stone.player}"><i>${selected.id==="last"?stone.order:""}</i></span>`:control?`<span class="control ${control}">${control==="neutral"?"×":""}</span>`:"";
   });
+  renderConnections(overlay.links);
 }
 
-function svgLine(a, b, className, extra = "") {
-  const start = point(a);
-  const end = point(b);
-  return `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" class="${className}" ${extra}/>`;
+function renderStatus(){
+  const data=stats(state);
+  $("#blackPrimary").textContent=data.primary.black;$("#whitePrimary").textContent=data.primary.white;
+  $("#blackSecondary").textContent=data.label;$("#whiteSecondary").textContent=data.label;
+  $("#roundNumber").textContent=String(Math.max(1,Math.ceil((state.moves.length+1)/2))).padStart(2,"0");
+  $("#turnStone").className=`turn-stone ${state.turn}`;$("#turnLabel").textContent=`${state.turn.toUpperCase()} TURN`;$("#turnText").textContent=`${names[state.turn]}의 차례`;
+  const legal=overlays(state).legal.size;
+  $("#actionHint").textContent=selected.id==="push"?"돌을 놓아 인접한 줄을 밀어내세요.":`둘 수 있는 자리 ${legal}곳`;
+  $("#statusList").innerHTML=[
+    ["진행",`${state.moves.length}수`],["가능한 수",`${legal}곳`],
+    ...(selected.id==="last"?[["유지 한도","각 5개"]]:[]),
+    ...(["push","pursuit","collapse"].includes(selected.id)?[["승리 점수",selected.id==="push"?"4점":"5점"]]:[])
+  ].map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join("");
+  $("#moveLog").innerHTML=(state.log.length?state.log.slice(0,5):["아직 놓인 돌이 없습니다."]).map(v=>`<li>${v}</li>`).join("");
+  $("#undoButton").disabled=!state.history.length;
 }
 
-function clueMarkup(line) {
-  const start = point(line.a);
-  const end = point(line.b);
-  const middleX = (start.x + end.x) / 2;
-  const middleY = (start.y + end.y) / 2;
-  const angle = Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
-  return `
-    <g class="clue" transform="translate(${middleX} ${middleY}) rotate(${angle})">
-      <path d="M-22 0 C-15 -9 -8 9 0 0 S15 -9 22 0"/>
-      <circle cx="0" cy="0" r="3"/>
-    </g>`;
+function render(){renderBoard();renderStatus();if(state.winner)showResult();}
+
+function move(x,y){
+  const result=playMove(state,x,y);
+  if(!result.ok){tone("invalid");toast(result.message);return;}
+  tone(result.event?"remove":"place");render();
 }
 
-function renderLines() {
-  const ownLines = getLines(game, viewer);
-  const opponent = viewer === "black" ? "white" : "black";
-  const opponentLines = getLines(game, opponent);
-  const triangleEffect = pulseTriangle
-    ? pulseTriangle.stones.map((stone, index, stones) => svgLine(stone, stones[(index + 1) % 3], "score-line")).join("")
-    : "";
+function toast(msg){const el=$("#toast");el.textContent=msg;el.classList.add("visible");setTimeout(()=>el.classList.remove("visible"),1800);}
 
-  ui.lineLayer.innerHTML = `
-    <g class="own-lines">${ownLines.map((line) => svgLine(line.a, line.b, `resonance-line ${viewer}`)).join("")}</g>
-    <g class="opponent-clues">${opponentLines.map(clueMarkup).join("")}</g>
-    <g class="score-effect">${triangleEffect}</g>`;
+function fillRules(game){
+  $("#ruleNumber").textContent=`GAME ${game.number} · RULEBOOK`;$("#ruleTitle").textContent=game.title;
+  $("#ruleSummary").innerHTML=`<b>${game.english}</b><p>${game.summary}</p><span>${game.time} · ${game.level}</span>`;
+  $("#ruleSetup").textContent=game.setup;$("#ruleTurns").innerHTML=game.turns.map(v=>`<li>${v}</li>`).join("");
+  $("#ruleWin").textContent=game.win;$("#ruleTip").textContent=game.tip;$("#drawerPlayButton").dataset.game=game.id;
 }
 
-function renderStats() {
-  PLAYERS.forEach((player) => {
-    const stats = gameStats(game, player);
-    $(`#${player}Score`).textContent = game.score[player];
-    $(`#${player}Turns`).textContent = game.turns[player];
-    $(`#${player}Stones`).textContent = stats.stones;
-    $(`#${player}Lines`).textContent = stats.lines;
-    $(`.${player}-panel`).classList.toggle("active", game.turn === player && !game.winner);
-  });
-  ui.roundNumber.textContent = Math.min(game.round, 30);
-  ui.phaseLabel.textContent = game.overtime ? "OVERTIME ROUND" : "STANDARD ROUND";
-  ui.turnMessage.innerHTML = `<b>${playerName(game.turn)}</b>의 차례입니다`;
-  $("#restrictionText").textContent = game.score.black === 0
-    ? "3수 득점 금지 · 첫 점은 거리 4 필요"
-    : "첫 점 제한 해제 · 3수 제한 종료";
-  ui.insight.textContent = game.log[0] || "상대 돌은 보이지 않습니다. 파동의 방향을 읽으세요.";
+function openRules(game=selected){fillRules(game);$("#rulesDrawer").classList.add("active");$("#rulesDrawer").setAttribute("aria-hidden","false");}
+function closeRules(){$("#rulesDrawer").classList.remove("active");$("#rulesDrawer").setAttribute("aria-hidden","true");}
+
+function showResult(){
+  const winner=state.winner;$("#resultTitle").textContent=winner==="draw"?"무승부":`${names[winner]} 승리`;
+  $("#resultReason").textContent=state.reason;$("#resultMark").className=`result-mark ${winner}`;
+  $("#resultModal").classList.add("active");tone("win");
 }
 
-function render() {
-  renderBoard();
-  renderLines();
-  renderStats();
-}
-
-function setOverlay(element, active) {
-  element.classList.toggle("active", active);
-}
-
-function showToast(message, type = "") {
-  ui.toast.textContent = message;
-  ui.toast.className = `toast visible ${type}`;
-  window.setTimeout(() => ui.toast.classList.remove("visible"), 2100);
-}
-
-function showPass() {
-  if (game.winner) {
-    showResult();
-    return;
-  }
-  viewer = game.turn;
-  ui.nextPlayerName.textContent = playerName(game.turn);
-  ui.passStone.className = `pass-stone ${game.turn}-stone`;
-  setOverlay(ui.passOverlay, true);
-}
-
-function completeOutcome(delay = 650) {
-  window.clearTimeout(outcomeTimer);
-  outcomeTimer = window.setTimeout(() => {
-    pulseTriangle = null;
-    render();
-    showPass();
-  }, delay);
-}
-
-function selectTriangle(index) {
-  const triangle = game.pending?.triangles[index];
-  if (!triangle) return;
-  viewer = game.turn;
-  pulseTriangle = triangle;
-  chooseTriangle(game, index);
-  setOverlay(ui.choiceOverlay, false);
-  sound("score");
-  render();
-  completeOutcome(1050);
-}
-
-function showTriangleChoices(triangles) {
-  ui.triangleChoices.innerHTML = triangles.map((triangle, index) => {
-    const coordinates = triangle.stones
-      .map((stone) => `${String.fromCharCode(65 + stone.x)}${9 - stone.y}`)
-      .join(" · ");
-    return `<button data-triangle="${index}"><span>삼각형 ${index + 1}</span><b>${coordinates}</b><small>변 ${triangle.lengths.join(" · ")}</small></button>`;
-  }).join("");
-  setOverlay(ui.choiceOverlay, true);
-}
-
-function handleCellClick(event) {
-  if (!started || game.winner || ui.passOverlay.classList.contains("active") || game.pending) return;
-  const cell = event.target.closest(".cell");
-  if (!cell) return;
-  const actingPlayer = game.turn;
-  viewer = actingPlayer;
-  const beforeLines = getLines(game, actingPlayer).length;
-  const result = attemptPlacement(game, Number(cell.dataset.x), Number(cell.dataset.y));
-
-  if (result.type === "invalid") {
-    showToast(result.message || "선택할 수 없는 칸입니다.");
-    return;
-  }
-  if (result.type === "forbidden") {
-    sound("forbidden");
-    showToast(result.message, "danger");
-    return;
-  }
-  if (result.type === "choice") {
-    sound("clue");
-    render();
-    showTriangleChoices(result.triangles);
-    return;
-  }
-  if (result.type === "scored") {
-    pulseTriangle = result.triangle;
-    sound("score");
-    render();
-    completeOutcome(1050);
-    return;
-  }
-  if (result.type === "failed") {
-    sound("fail");
-    render();
-    showToast("숨은 돌 발견 · 이번 턴은 종료됩니다.", "danger");
-    completeOutcome(1200);
-    return;
-  }
-
-  const madeLine = getLines(game, actingPlayer).length > beforeLines;
-  sound(madeLine ? "clue" : "place");
-  render();
-  completeOutcome(madeLine ? 850 : 550);
-}
-
-function startGame() {
-  initializeAudio();
-  game = createGame();
-  viewer = "black";
-  started = true;
-  pulseTriangle = null;
-  setOverlay(ui.startOverlay, false);
-  setOverlay(ui.resultOverlay, false);
-  setOverlay(ui.passOverlay, false);
-  render();
-}
-
-function requestRestart() {
-  if (!started || window.confirm("현재 대국을 끝내고 처음부터 다시 시작할까요?")) startGame();
-}
-
-function showResult() {
-  const winner = game.winner;
-  $("#resultEyebrow").textContent = winner === "draw" ? "DRAW GAME" : "GAME COMPLETE";
-  $("#resultTitle").textContent = winner === "draw" ? "무승부" : `${playerName(winner)} 승리`;
-  $("#resultReason").textContent = game.resultReason;
-  $("#winnerStone").className = winner === "draw" ? "winner-stone draw-stone" : `winner-stone ${winner}-stone`;
-  $("#finalBlack").textContent = game.score.black;
-  $("#finalWhite").textContent = game.score.white;
-  setOverlay(ui.passOverlay, false);
-  setOverlay(ui.resultOverlay, true);
-}
-
-function openRules() {
-  ui.rulesDrawer.classList.add("active");
-  ui.rulesDrawer.setAttribute("aria-hidden", "false");
-}
-
-function closeRules() {
-  ui.rulesDrawer.classList.remove("active");
-  ui.rulesDrawer.setAttribute("aria-hidden", "true");
-}
-
-function showHome() {
-  setOverlay(ui.startOverlay, true);
-}
-
-buildBoard();
-render();
-
-ui.board.addEventListener("click", handleCellClick);
-$("#startButton").addEventListener("click", startGame);
-$("#revealButton").addEventListener("click", () => {
-  initializeAudio();
-  sound("reveal");
-  setOverlay(ui.passOverlay, false);
-  render();
+renderLibrary();buildBoard();
+$("#gameGrid").addEventListener("click",e=>{
+  const info=e.target.closest("[data-info]");if(info){e.stopPropagation();openRules(GAMES.find(g=>g.id===info.dataset.info));return;}
+  const card=e.target.closest("[data-game]");if(card)openGame(card.dataset.game);
 });
-$("#restartButton").addEventListener("click", requestRestart);
-$("#resultRestartButton").addEventListener("click", startGame);
-$("#homeButton").addEventListener("click", showHome);
-$("#rulesButton").addEventListener("click", openRules);
-$("#startRulesButton").addEventListener("click", openRules);
-$("#resultRulesButton").addEventListener("click", openRules);
-$$("[data-close-rules]").forEach((button) => button.addEventListener("click", closeRules));
-ui.triangleChoices.addEventListener("click", (event) => {
-  const choice = event.target.closest("[data-triangle]");
-  if (choice) selectTriangle(Number(choice.dataset.triangle));
-});
-$$("[data-rule-tab]").forEach((button) => {
-  button.addEventListener("click", () => {
-    $$("[data-rule-tab]").forEach((tab) => tab.classList.toggle("active", tab === button));
-    $$("[data-rule-page]").forEach((page) => page.classList.toggle("active", page.dataset.rulePage === button.dataset.ruleTab));
-  });
-});
-$("#soundButton").addEventListener("click", () => {
-  muted = !muted;
-  localStorage.setItem("resonance-muted", String(muted));
-  $("#soundButton").classList.toggle("muted", muted);
-  if (!muted) sound("reveal");
-});
-$("#soundButton").classList.toggle("muted", muted);
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    if (ui.rulesDrawer.classList.contains("active")) closeRules();
-    else if (ui.startOverlay.classList.contains("active") && started) setOverlay(ui.startOverlay, false);
-  }
-});
+$("#board").addEventListener("click",e=>{const c=e.target.closest(".cell");if(c&&!state.winner)move(+c.dataset.x,+c.dataset.y);});
+$("#backButton").addEventListener("click",goLibrary);$("#collectionButton").addEventListener("click",goLibrary);$("#brandButton").addEventListener("click",goLibrary);
+$("#rulesButton").addEventListener("click",()=>openRules(selected));$("#sideRulesButton").addEventListener("click",()=>openRules(selected));
+$$("[data-close-rules]").forEach(x=>x.addEventListener("click",closeRules));
+$("#drawerPlayButton").addEventListener("click",e=>{closeRules();openGame(e.currentTarget.dataset.game);});
+$("#restartButton").addEventListener("click",()=>{state=createState(selected.id);$("#resultModal").classList.remove("active");render();});
+$("#rematchButton").addEventListener("click",()=>{state=createState(selected.id);$("#resultModal").classList.remove("active");render();});
+$("#otherGameButton").addEventListener("click",goLibrary);
+$("#undoButton").addEventListener("click",()=>{if(!state.history.length)return;const saved=state.history.pop();restore(state,saved);$("#resultModal").classList.remove("active");render();});
+$("#soundButton").addEventListener("click",()=>{muted=!muted;localStorage.setItem("tenfold-muted",muted);$("#soundButton").classList.toggle("muted",muted);});
+$("#soundButton").classList.toggle("muted",muted);
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#rulesDrawer").classList.contains("active"))closeRules();else if(!$("#playView").hidden)goLibrary();}});
 
-if (["localhost", "127.0.0.1"].includes(location.hostname)) {
-  window.__resonance = {
-    get game() { return game; },
-    start: startGame,
-    place: (x, y) => {
-      const result = attemptPlacement(game, x, y);
-      render();
-      return result;
-    },
-    reveal: () => {
-      viewer = game.turn;
-      setOverlay(ui.passOverlay, false);
-      render();
-    },
-  };
-
-  if (new URLSearchParams(location.search).get("preview") === "board") {
-    startGame();
-    [[0, 0], [8, 8], [4, 0], [8, 4]].forEach(([x, y]) => attemptPlacement(game, x, y));
-    viewer = game.turn;
-    setOverlay(ui.passOverlay, false);
-    render();
-  }
+if(["localhost","127.0.0.1"].includes(location.hostname)){
+  window.__tenfold={GAMES,get state(){return state;},openGame,move};
+  const preview=new URLSearchParams(location.search).get("game");if(preview)openGame(preview);
 }
