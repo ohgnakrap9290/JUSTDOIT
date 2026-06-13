@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0d0c" />
+    <meta name="description" content="보이지 않는 돌과 공명 단서를 추리해, 제한된 수명 안에 삼각형을 완성하는 2인 전략 게임." />
+    <meta property="og:title" content="공명 | 숨은 돌 전략 게임" />
+    <meta property="og:description" content="돌은 사라지고, 파동은 단서를 남긴다. 공명 삼각형을 먼저 완성하라." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>공명 | 숨은 돌 전략 게임</title>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <button class="brand" id="homeButton" aria-label="공명 시작 화면">
+          <span class="brand-mark"><i></i><i></i><i></i></span>
+          <span><b>공명</b><small>RESONANCE</small></span>
+        </button>
+        <div class="top-actions">
+          <button class="ghost-button" id="rulesButton">게임 설명</button>
+          <button class="icon-button" id="soundButton" aria-label="소리 끄기">
+            <svg class="sound-on" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19V5Zm4.2 3.2a5.5 5.5 0 0 1 0 7.6M18 5.5a9 9 0 0 1 0 13"/></svg>
+            <svg class="sound-off" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19V5Zm4 5 5 5m0-5-5 5"/></svg>
+          </button>
+          <button class="icon-button" id="restartButton" aria-label="게임 다시 시작">
+            <svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M18.5 11A7 7 0 0 0 6.2 7.5L4 12m16 0-2.2 4.5A7 7 0 0 1 5.5 13"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="game-layout">
+        <aside class="player-panel black-panel" data-player="black">
+          <div class="player-heading">
+            <span class="player-stone black-stone"></span>
+            <div><small>선공</small><strong>흑</strong></div>
+            <span class="turn-indicator">TURN</span>
+          </div>
+          <div class="score"><strong id="blackScore">0</strong><span>/ 5</span></div>
+          <dl>
+            <div><dt>사용 턴</dt><dd><b id="blackTurns">0</b> / 30</dd></div>
+            <div><dt>살아 있는 돌</dt><dd id="blackStones">0</dd></div>
+            <div><dt>공명</dt><dd id="blackLines">0</dd></div>
+          </dl>
+          <div class="restriction">
+            <span>흑 금수</span>
+            <p id="restrictionText">3수 득점 금지 · 첫 점은 거리 4 필요</p>
+          </div>
+        </aside>
+
+        <section class="board-section">
+          <div class="round-head">
+            <div>
+              <span id="phaseLabel">STANDARD ROUND</span>
+              <strong><b id="roundNumber">1</b> 라운드</strong>
+            </div>
+            <p id="turnMessage"><b>흑</b>의 차례입니다</p>
+          </div>
+
+          <div class="board-wrap">
+            <div class="board-glow"></div>
+            <svg id="lineLayer" class="line-layer" viewBox="0 0 800 800" aria-hidden="true"></svg>
+            <div id="board" class="board" role="grid" aria-label="9×9 공명 게임판"></div>
+            <div class="coordinate coordinate-top" aria-hidden="true"></div>
+            <div class="coordinate coordinate-left" aria-hidden="true"></div>
+          </div>
+
+          <div class="legend">
+            <span><i class="legend-wave"></i>상대 공명 단서</span>
+            <span><i class="legend-flash"></i>수명 1</span>
+            <span><i class="legend-trace"></i>사라진 흔적</span>
+          </div>
+        </section>
+
+        <aside class="player-panel white-panel" data-player="white">
+          <div class="player-heading">
+            <span class="player-stone white-stone"></span>
+            <div><small>후공</small><strong>백</strong></div>
+            <span class="turn-indicator">TURN</span>
+          </div>
+          <div class="score"><strong id="whiteScore">0</strong><span>/ 5</span></div>
+          <dl>
+            <div><dt>사용 턴</dt><dd><b id="whiteTurns">0</b> / 30</dd></div>
+            <div><dt>살아 있는 돌</dt><dd id="whiteStones">0</dd></div>
+            <div><dt>공명</dt><dd id="whiteLines">0</dd></div>
+          </dl>
+          <div class="insight-card">
+            <span>지금 기억할 것</span>
+            <p id="insightText">상대 돌은 보이지 않습니다. 파동의 방향을 읽으세요.</p>
+          </div>
+        </aside>
+      </main>
+
+      <div class="toast" id="toast" role="status"></div>
+
+      <section class="overlay start-overlay active" id="startOverlay">
+        <div class="start-art" aria-hidden="true">
+          <span class="art-stone art-one"></span><span class="art-stone art-two"></span><span class="art-stone art-three"></span>
+          <i class="art-line line-one"></i><i class="art-line line-two"></i><i class="art-line line-three"></i>
+        </div>
+        <div class="start-copy">
+          <p class="eyebrow">HIDDEN INFORMATION STRATEGY</p>
+          <h1>보이지 않는 돌.<br /><em>남겨진 공명.</em></h1>
+          <p class="lead">상대에게는 파동의 일부만 보입니다.<br />일곱 번의 수명 안에 세 돌을 연결하세요.</p>
+          <div class="core-loop">
+            <span>숨은 배치</span><i></i><span>단서 노출</span><i></i><span>위치 추리</span><i></i><span>삼각 완성</span>
+          </div>
+          <button class="primary-button" id="startButton">대국 시작 <span>2 PLAYERS</span></button>
+          <button class="text-button" id="startRulesButton">규칙을 먼저 읽어보기</button>
+        </div>
+        <p class="version">RESONANCE · RULESET v3.2</p>
+      </section>
+
+      <section class="overlay pass-overlay" id="passOverlay">
+        <div class="pass-card">
+          <p class="eyebrow">PASS THE DEVICE</p>
+          <span class="pass-stone" id="passStone"></span>
+          <h2><b id="nextPlayerName">백</b> 차례</h2>
+          <p>상대가 화면을 보지 않는지 확인하세요.<br />준비되면 자신의 판을 여세요.</p>
+          <button class="primary-button" id="revealButton">내 판 보기</button>
+        </div>
+      </section>
+
+      <section class="overlay choice-overlay" id="choiceOverlay">
+        <div class="modal-card">
+          <p class="eyebrow">MULTIPLE RESONANCE</p>
+          <h2>득점할 삼각형을 선택하세요</h2>
+          <p>한 수에는 최대 1점만 얻습니다. 선택한 세 돌은 사라집니다.</p>
+          <div id="triangleChoices" class="triangle-choices"></div>
+        </div>
+      </section>
+
+      <section class="overlay result-overlay" id="resultOverlay">
+        <div class="result-card">
+          <p class="eyebrow" id="resultEyebrow">GAME COMPLETE</p>
+          <span class="winner-stone" id="winnerStone"></span>
+          <h2 id="resultTitle">흑 승리</h2>
+          <p id="resultReason">라운드 종료 판정에서 앞섰습니다.</p>
+          <div class="final-score"><span>흑 <b id="finalBlack">0</b></span><i></i><span><b id="finalWhite">0</b> 백</span></div>
+          <button class="primary-button" id="resultRestartButton">다시 대국하기</button>
+          <button class="text-button" id="resultRulesButton">전체 규칙 보기</button>
+        </div>
+      </section>
+
+      <section class="rules-drawer" id="rulesDrawer" aria-hidden="true">
+        <div class="rules-backdrop" data-close-rules></div>
+        <article class="rules-content">
+          <header>
+            <div><p class="eyebrow">RULEBOOK · v3.2</p><h2>공명 게임 설명</h2></div>
+            <button class="icon-button" data-close-rules aria-label="설명 닫기"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <nav class="rule-nav">
+            <button class="active" data-rule-tab="quick">핵심 규칙</button>
+            <button data-rule-tab="detail">상세 규칙</button>
+            <button data-rule-tab="forbidden">흑 금수</button>
+          </nav>
+
+          <div class="rule-page active" data-rule-page="quick">
+            <section class="rule-hero">
+              <span class="rule-number">01</span><div><h3>일곱 턴 안에 삼각형을 만드세요</h3><p>가로·세로·대각선 방향으로 거리 2~4인 같은 색 돌은 공명합니다. 세 돌이 서로 모두 공명하면 1점입니다.</p></div>
+            </section>
+            <div class="rule-diagram triangle-diagram"><i></i><i></i><i></i><span></span><span></span><span></span></div>
+            <div class="rule-grid">
+              <section><b>숨은 돌</b><p>상대 돌은 기본적으로 보이지 않습니다. 이미 차지한 칸을 고르면 턴을 잃고 그 돌이 잠시 공개됩니다.</p></section>
+              <section><b>공명 단서</b><p>내 선은 전부 보이지만, 상대에게는 중앙의 짧은 파동과 방향만 보입니다.</p></section>
+              <section><b>수명과 흔적</b><p>돌은 자신의 턴마다 수명이 줄어 0에 사라집니다. 수명 1에는 공개되고, 빈자리에는 한 라운드간 흔적이 남습니다.</p></section>
+              <section><b>승리</b><p>5점 도달 후 라운드를 끝까지 진행해 점수를 비교합니다. 동점이면 라운드 단위 연장전에 들어갑니다.</p></section>
+            </div>
+          </div>
+
+          <div class="rule-page" data-rule-page="detail">
+            <ol class="detail-list">
+              <li><span>01</span><div><b>턴과 라운드</b><p>흑 한 턴과 백 한 턴이 1라운드입니다. 흑이 먼저 두며 각자 최대 30턴까지 진행합니다.</p></div></li>
+              <li><span>02</span><div><b>거리</b><p>두 좌표의 가로·세로·대각선 칸 차이가 거리입니다. 거리 2, 3, 4만 공명하며 중간에 살아 있는 돌이 있으면 색과 관계없이 막힙니다.</p></div></li>
+              <li><span>03</span><div><b>돌의 수명</b><p>새 돌은 수명 7로 시작하고, 놓은 턴 종료부터 1씩 감소합니다. 득점 판정이 수명 감소보다 먼저입니다.</p></div></li>
+              <li><span>04</span><div><b>득점</b><p>이번에 놓은 돌을 포함한 삼각형만 득점합니다. 한 수에 여러 개가 생겨도 하나를 골라 1점만 얻고, 선택한 세 돌은 흔적을 남기며 제거됩니다.</p></div></li>
+              <li><span>05</span><div><b>공개와 흔적</b><p>실패로 공개된 돌은 소유자의 다음 차례가 끝나면 숨습니다. 수명 1인 돌은 모두에게 보입니다. 흔적은 정보일 뿐 배치와 공명을 막지 않습니다.</p></div></li>
+              <li><span>06</span><div><b>종료 판정</b><p>5점 이상이 나온 라운드 종료 시 높은 점수가 승리합니다. 동점은 연장. 30턴 종료 시 점수, 공명선 수, 남은 수명 합 순으로 판정합니다.</p></div></li>
+            </ol>
+          </div>
+
+          <div class="rule-page" data-rule-page="forbidden">
+            <section class="forbidden-rule"><span>금수 1</span><h3>흑 3수 삼각 금수</h3><p>흑은 자신의 세 번째 차례에 삼각형을 완성해 득점할 수 없습니다. 공명선만 만드는 수는 허용됩니다.</p></section>
+            <section class="forbidden-rule"><span>금수 2</span><h3>흑 첫 점 소삼각 금수</h3><p>흑의 첫 득점 삼각형에는 거리 4인 변이 하나 이상 있어야 합니다. 흑이 첫 점을 얻은 뒤에는 이 제한이 사라집니다.</p></section>
+            <div class="length-table">
+              <div><span>2 · 2 · 3</span><b class="denied">금지</b></div>
+              <div><span>3 · 3 · 3</span><b class="denied">금지</b></div>
+              <div><span>2 · 3 · 4</span><b class="allowed">가능</b></div>
+              <div><span>4 · 4 · 4</span><b class="allowed">가능</b></div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
