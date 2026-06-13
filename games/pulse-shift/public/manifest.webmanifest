@@ -1,0 +1,19 @@
+{
+  "name": "PULSE SHIFT",
+  "short_name": "PULSE SHIFT",
+  "description": "탭 한 번으로 궤도를 바꾸며 60초를 버티는 원버튼 아케이드",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070b18",
+  "theme_color": "#070b18",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
