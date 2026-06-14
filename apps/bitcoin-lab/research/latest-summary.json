@@ -1,0 +1,42 @@
+{
+  "generatedAt": "2026-06-14",
+  "market": "KRW-BTC",
+  "timeframe": "15m",
+  "costs": {
+    "feePerSidePct": 0.05,
+    "slippagePerSidePct": 0.03
+  },
+  "runs": [
+    {
+      "periodDays": 180,
+      "strategy": "pullback-breakout",
+      "trades": 15,
+      "winRatePct": 40,
+      "netReturnPct": -0.818,
+      "maxDrawdownPct": 1.097,
+      "profitFactor": 0.429,
+      "status": "current"
+    },
+    {
+      "periodDays": 180,
+      "strategy": "donchian",
+      "trades": 164,
+      "winRatePct": 14.63,
+      "netReturnPct": -13.803,
+      "maxDrawdownPct": 14.594,
+      "profitFactor": 0.357,
+      "status": "baseline"
+    },
+    {
+      "periodDays": 365,
+      "strategy": "pullback-breakout",
+      "trades": 20,
+      "winRatePct": 35,
+      "netReturnPct": -1.445,
+      "maxDrawdownPct": 1.445,
+      "profitFactor": 0.335,
+      "status": "current"
+    }
+  ],
+  "note": "These are research results, not investment advice. The tested strategy did not pass the paper-trading gate."
+}
